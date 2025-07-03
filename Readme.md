@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -133,8 +134,15 @@
             <span>점수: <span id="score">0</span></span>
         </div>
         <div id="game-area">
-            <div id="home-scene" class="scene"></div>
-            <div id="street-scene" class="scene hidden"></div>
+            <div id="home-scene" class="scene">
+                <div id="fridge" class="game-object">🧊</div>
+                <div id="bed" class="game-object">🛏️</div>
+                <div id="treadmill" class="game-object">🏃</div>
+                <div id="door" class="game-object">🚪</div>
+            </div>
+            <div id="street-scene" class="scene hidden">
+                <div id="toilet" class="game-object">🚽</div>
+            </div>
             <div id="player" class="game-object">😊</div>
         </div>
         <div id="timer-container"><div id="timer-bar"></div></div>
@@ -179,7 +187,8 @@
         let state = {
             phase: 'PREP', level:1, score:0,
             pos:{x:0,y:0}, active:false,
-            timer:null, time:0, max:0
+            timer:null, time:0, max:0,
+            food:0, cond:0
         };
 
         const settings = {
@@ -199,7 +208,7 @@
                 const btn=document.createElement('button');
                 btn.textContent=b.text;
                 btn.className=`modal-button ${b.cls||'primary'}`;
-                btn.onclick=()=>{ elems.modal.classList.add('hidden'); b.cb(); };
+                btn.onclick=()=>{ elems.modal.classList.add('hidden'); if(b.cb) b.cb(); };
                 elems.modalButtons.appendChild(btn);
             });
             elems.modal.classList.remove('hidden');
@@ -209,15 +218,13 @@
             elems.scoreDisplay.textContent=state.score;
         }
         function placePlayer(center=true){
-            const area=elems.player.parentNode.getBoundingClientRect();
+            const area=elems.homeScene.parentNode.getBoundingClientRect();
             state.pos.x = center? (area.width/2-20): state.pos.x;
             state.pos.y = center? (area.height/2-20): state.pos.y;
             elems.player.style.left = state.pos.x+'px';
             elems.player.style.top  = state.pos.y+'px';
         }
-        function clearObstacles(){
-            elems.streetScene.querySelectorAll('.obstacle').forEach(o=>o.remove());
-        }
+        function clearObstacles(){ elems.streetScene.querySelectorAll('.obstacle').forEach(o=>o.remove()); }
         function spawnObstacles(){
             clearObstacles();
             const count = Math.min(10, state.level*2);
@@ -225,7 +232,7 @@
             for(let i=0;i<count;i++){
                 const obs = document.createElement('div');
                 obs.className='obstacle';
-                const sizeW=30, sizeH=60;
+                const sizeW=30;
                 obs.style.left = Math.random()*(area.width-sizeW)+'px';
                 obs.style.top  = -Math.random()*area.height+'px';
                 obs.style.animationDuration = (3+Math.random()*2-state.level*0.1)+'s';
@@ -246,17 +253,15 @@
             state.phase='URGENCY'; state.active=false;
             elems.sounds.start.currentTime=0;
             elems.homeScene.classList.add('hidden');
-            elems.streetScene.classList.remove('hidden');
-            // 시간 계산
+            elems.street-scene.classList.remove('hidden');
             const weatherKeys=Object.keys(settings.weatherPenalty);
             const weather=weatherKeys[Math.floor(Math.random()*weatherKeys.length)];
             state.max = Math.max(5, settings.baseTime - state.level*0.8 - state.food - state.cond - settings.weatherPenalty[weather]);
             state.time = state.max;
-            // 장애물
             spawnObstacles();
             placePlayer(false);
             updateUI();
-            showModal('으악!', `배가..! 화장실까지 가야해! (날씨: ${weather})`, [{text:'달려!',cb:()=>runTimer()}]);
+            showModal('으악!', `배가..! 화장실까지 가야해! (날씨: ${weather})`, [{text:'달려!',cb:runTimer}]);
         }
         function runTimer(){
             state.active=true;
@@ -268,89 +273,4 @@
                 if(pct<50) elems.timerBar.style.background='#FBBF24';
                 if(pct<25) elems.timerBar.style.background='var(--danger-color)';
                 if(state.time<=0) return endGame();
-                // 장애물 충돌 체크
-                document.querySelectorAll('.obstacle').forEach(obs=>{
-                    if(obs.getBoundingClientRect && elems.player.getBoundingClientRect && !(obs.removed)){
-                        const r1=elems.player.getBoundingClientRect(), r2=obs.getBoundingClientRect();
-                        if(!(r1.right<r2.left||r1.left>r2.right||r1.bottom<r2.top||r1.top>r2.bottom)){
-                            obs.removed=true; obs.remove(); state.time -= 2; 
-                        }
-                    }
-                });
-            },100);
-        }
-        function endGame(){
-            clearInterval(state.timer);
-            state.active=false;
-            elems.sounds.fail.play();
-            elems.player.textContent='😱';
-            showModal('게임 오버', `최종 점수: ${state.score}`, [{text:'다시',cb:init}]);
-        }
-        function completeLevel(){
-            clearInterval(state.timer);
-            state.active=false;
-            elems.sounds.success.play();
-            state.score += 100 + Math.floor(state.time*10);
-            state.level++;
-            elems.player.textContent='😌';
-            showModal('성공!', '다음 레벨로 준비!',[{text:'계속',cb:startPrep}]);
-        }
-        function handlePrepCollisions(){
-            const coords = {fr: '냉장고', bd:'침대', td:'운동기구', dr:'문'};
-            Object.entries({fridge:['fr',choices.food], bed:['bd',choices.condition], treadmill:['td',choices.condition], door:['dr',null]})
-            .forEach(([id,[key,ch]])=>{
-                const obj = document.getElementById(id);
-                const pRect = elems.player.getBoundingClientRect();
-                const oRect = obj.getBoundingClientRect();
-                if(!(pRect.right<oRect.left||pRect.left>oRect.right||pRect.bottom<oRect.top||pRect.top>oRect.bottom)){
-                    state.active=false;
-                    if(id==='door'){
-                        showModal('외출','나갈까?',[{text:'나가자',cb:startUrgency},{text:'취소',cls:'cancel',cb:()=>state.active=true}]);
-                    } else {
-                        const list = Object.entries(ch).map(([text,pen])=>({text,cb:()=>{ if(key==='fr') state.food=pen; else state.cond=pen; state.active=true;}}));
-                        list.push({text:'건너뛰기',cls:'cancel',cb:()=>state.active=true});
-                        showModal(coords[id],coords[id]+' 선택',[...list]);
-                    }
-                }
-            });
-        }
-        function move(dx,dy){
-            if(!state.active) return;
-            const area=elems.gameArea||document.getElementById('game-area').getBoundingClientRect();
-            let nx=state.pos.x+dx, ny=state.pos.y+dy;
-            const pr=elems.player.getBoundingClientRect();
-            if(nx<0) nx=0; if(ny<0) ny=0;
-            if(nx+pr.width>area.width) nx=area.width-pr.width;
-            if(ny+pr.height>area.height) ny=area.height-pr.height;
-            state.pos.x=nx; state.pos.y=ny;
-            elems.player.style.left=nx+'px'; elems.player.style.top=ny+'px';
-            if(state.phase==='PREP') handlePrepCollisions();
-            else if(state.phase==='URGENCY'){
-                const to= document.getElementById('toilet');
-                const r1=elems.player.getBoundingClientRect(), r2=to.getBoundingClientRect();
-                if(!(r1.right<r2.left||r1.left>r2.right||r1.bottom<r2.top||r1.top>r2.bottom)) completeLevel();
-            }
-        }
-        // 키보드 & 버튼
-        const keys = {'ArrowUp':()=>move(0,-settings.speed),'ArrowDown':()=>move(0,settings.speed),'ArrowLeft':()=>move(-settings.speed,0),'ArrowRight':()=>move(settings.speed,0)};
-        document.addEventListener('keydown',e=>{ if(keys[e.key]){e.preventDefault(); keys[e.key]();}});
-        ['up','down','left','right'].forEach(dir=>{
-            document.getElementById(dir).addEventListener('pointerdown',()=>keys['Arrow'+dir.charAt(0).toUpperCase()+dir.slice(1)]());
-        });
-        // 터치 스와이프
-        let tStart={x:0,y:0};
-        document.addEventListener('touchstart',e=>{ tStart.x=e.changedTouches[0].clientX; tStart.y=e.changedTouches[0].clientY; });
-        document.addEventListener('touchend',e=>{
-            const dx=e.changedTouches[0].clientX - tStart.x;
-            const dy=e.changedTouches[0].clientY - tStart.y;
-            if(Math.abs(dx)>Math.abs(dy)) dx>30?move(settings.speed,0): dx<-30?move(-settings.speed,0):null;
-            else dy>30?move(0,settings.speed): dy<-30?move(0,-settings.speed):null;
-        });
-        // 초기화
-        function init(){ state={phase:'PREP',level:1,score:0,pos:{},active:false}; initHome(); }
-        function initHome(){ state.food=state.cond=0; showModal('게임 설명','음식·컨디션 조절 후 화장실까지 가세요!',[{text:'시작',cb:startPrep}]); }
-        initHome();
-    })();
-    </script>
-</body>
-</html>
+                document.querySelectorAll('.
