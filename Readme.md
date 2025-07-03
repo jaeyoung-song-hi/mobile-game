@@ -58,6 +58,7 @@
             width:40px; height:40px; background:#FBBF24;
             border:3px solid #F59E0B; border-radius:50%;
             transition: top 0.1s linear, left 0.1s linear;
+            z-index: 10;
         }
         /* Home objects */
         #fridge { top:20px; right:20px; font-size:50px; }
@@ -74,7 +75,7 @@
             from { transform: translateY(-80px); }
             to   { transform: translateY(100vh); }
         }
-        #toilet { font-size:40px; width:50px; height:50px; }
+        #toilet { font-size:40px; width:50px; height:50px; z-index:5; }
         #timer-container { width:90%; margin:15px auto;
             background:var(--border-color); border-radius:10px;
         }
@@ -190,7 +191,6 @@
             timer:null, time:0, max:0,
             food:0, cond:0
         };
-
         const settings = {
             speed: 12,
             baseTime:25,
@@ -200,77 +200,51 @@
             food: {'일상식 🍚':0,'기름진 음식 🍗':3,'매운 음식 🌶️':4,'찬 음식 🍦':2,'상한 음식 🤢':6},
             condition: {'푹 쉬기 😊':0,'스트레스 🤯':3,'운동 🏃💨':5}
         };
-        function showModal(title,msg,buttons){
-            elems.modalTitle.textContent=title;
-            elems.modalMessage.innerHTML=msg;
-            elems.modalButtons.innerHTML='';
-            buttons.forEach(b=>{
-                const btn=document.createElement('button');
-                btn.textContent=b.text;
-                btn.className=`modal-button ${b.cls||'primary'}`;
-                btn.onclick=()=>{ elems.modal.classList.add('hidden'); if(b.cb) b.cb(); };
+        function showModal(title, message, buttons) {
+            elems.modalTitle.textContent = title;
+            elems.modalMessage.innerHTML = message;
+            elems.modalButtons.innerHTML = '';
+            buttons.forEach(btnInfo => {
+                const btn = document.createElement('button');
+                btn.textContent = btnInfo.text;
+                btn.className = `modal-button ${btnInfo.cls || 'primary'}`;
+                btn.addEventListener('click', () => {
+                    elems.modal.classList.add('hidden');
+                    if (btnInfo.cb) btnInfo.cb();
+                });
                 elems.modalButtons.appendChild(btn);
             });
             elems.modal.classList.remove('hidden');
         }
-        function updateUI(){
-            elems.levelDisplay.textContent=state.level;
-            elems.scoreDisplay.textContent=state.score;
+        function updateUI() {
+            elems.levelDisplay.textContent = state.level;
+            elems.scoreDisplay.textContent = state.score;
         }
-        function placePlayer(center=true){
-            const area=elems.homeScene.parentNode.getBoundingClientRect();
-            state.pos.x = center? (area.width/2-20): state.pos.x;
-            state.pos.y = center? (area.height/2-20): state.pos.y;
-            elems.player.style.left = state.pos.x+'px';
-            elems.player.style.top  = state.pos.y+'px';
+        function placePlayer(center=true) {
+            const area = elems.homeScene.parentNode.getBoundingClientRect();
+            state.pos.x = center ? (area.width / 2 - 20) : state.pos.x;
+            state.pos.y = center ? (area.height / 2 - 20) : state.pos.y;
+            elems.player.style.left = `${state.pos.x}px`;
+            elems.player.style.top  = `${state.pos.y}px`;
         }
-        function clearObstacles(){ elems.streetScene.querySelectorAll('.obstacle').forEach(o=>o.remove()); }
-        function spawnObstacles(){
+        function clearObstacles() {
+            elems.streetScene.querySelectorAll('.obstacle').forEach(o => o.remove());
+        }
+        function spawnObstacles() {
             clearObstacles();
-            const count = Math.min(10, state.level*2);
+            const count = Math.min(10, state.level * 2);
             const area = elems.streetScene.getBoundingClientRect();
-            for(let i=0;i<count;i++){
+            for (let i = 0; i < count; i++) {
                 const obs = document.createElement('div');
-                obs.className='obstacle';
-                const sizeW=30;
-                obs.style.left = Math.random()*(area.width-sizeW)+'px';
-                obs.style.top  = -Math.random()*area.height+'px';
-                obs.style.animationDuration = (3+Math.random()*2-state.level*0.1)+'s';
+                obs.className = 'obstacle';
+                obs.style.left = `${Math.random() * (area.width - 30)}px`;
+                obs.style.top  = `${-Math.random() * area.height}px`;
+                obs.style.animationDuration = `${3 + Math.random() * 2 - state.level * 0.1}s`;
                 elems.streetScene.appendChild(obs);
             }
         }
-        function startPrep(){
-            state.phase='PREP'; state.active=true;
+        function startPrep() {
+            state.phase = 'PREP'; state.active = true;
             clearInterval(state.timer);
             clearObstacles();
-            elems.streetScene.classList.add('hidden');
-            elems.homeScene.classList.remove('hidden');
-            placePlayer(true); updateUI();
-            elems.timerBar.style.width='100%'; elems.timerBar.style.background='var(--secondary-color)';
-            elems.sounds.start.play();
-        }
-        function startUrgency(){
-            state.phase='URGENCY'; state.active=false;
-            elems.sounds.start.currentTime=0;
-            elems.homeScene.classList.add('hidden');
-            elems.street-scene.classList.remove('hidden');
-            const weatherKeys=Object.keys(settings.weatherPenalty);
-            const weather=weatherKeys[Math.floor(Math.random()*weatherKeys.length)];
-            state.max = Math.max(5, settings.baseTime - state.level*0.8 - state.food - state.cond - settings.weatherPenalty[weather]);
-            state.time = state.max;
-            spawnObstacles();
-            placePlayer(false);
-            updateUI();
-            showModal('으악!', `배가..! 화장실까지 가야해! (날씨: ${weather})`, [{text:'달려!',cb:runTimer}]);
-        }
-        function runTimer(){
-            state.active=true;
-            clearInterval(state.timer);
-            state.timer = setInterval(()=>{
-                state.time -= 0.1;
-                const pct = (state.time/state.max)*100;
-                elems.timerBar.style.width = pct+'%';
-                if(pct<50) elems.timerBar.style.background='#FBBF24';
-                if(pct<25) elems.timerBar.style.background='var(--danger-color)';
-                if(state.time<=0) return endGame();
-                document.querySelectorAll('.
+            elems.streetScene.classList.add
